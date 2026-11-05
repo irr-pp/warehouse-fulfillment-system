@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PulseWMS - Warehouse Fulfillment System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .mono { font-family: 'JetBrains+Mono', monospace; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col antialiased">
+
+  <!-- TOP APP NAV -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Logo & System Info -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+          P
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-slate-900 tracking-tight">PulseWMS</span>
+            <span class="text-[11px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">Live Dock</span>
+          </div>
+          <p class="text-[11px] text-slate-500">Order-to-Dispatch Fulfillment System</p>
+        </div>
+      </div>
+
+      <!-- Center: Role Switcher -->
+      <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
+        <button id="roleBtn-manager" onclick="switchRole('manager')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all bg-white text-indigo-700 shadow-sm">
+          Manager
+        </button>
+        <button id="roleBtn-picker" onclick="switchRole('picker')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-600 hover:text-slate-900">
+          Picker & Packer
+        </button>
+        <button id="roleBtn-dispatch" onclick="switchRole('dispatch')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-600 hover:text-slate-900">
+          Dispatch Officer
+        </button>
+      </div>
+
+      <!-- Right Controls -->
+      <div class="flex items-center gap-2.5">
+        <button onclick="runAutoPipelineStep()" title="Simulate 1 pipeline transition" class="px-3 py-1.5 text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          Step Pipeline
+        </button>
+        <button onclick="resetData()" title="Reset sample dataset" class="px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
+          Reset Data
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MAIN VIEWPORT -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full flex-1">
+
+    <!-- ============================================================= -->
+    <!-- VIEW 1: OPERATIONS MANAGER VIEW                               -->
+    <!-- ============================================================= -->
+    <div id="view-manager" class="space-y-6">
+
+      <!-- KPI METRICS -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p class="text-xs font-medium text-slate-500">Active Pipeline Orders</p>
+          <div class="mt-2 flex items-baseline justify-between">
+            <span id="kpi-total-orders" class="text-2xl font-bold text-slate-900 mono">0</span>
+            <span id="kpi-rush-count" class="text-xs font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">0 Rush</span>
+          </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p class="text-xs font-medium text-slate-500">Inventory Stock Health</p>
+          <div class="mt-2 flex items-baseline justify-between">
+            <span id="kpi-stock-units" class="text-2xl font-bold text-slate-900 mono">0</span>
+            <span id="kpi-low-stock-count" class="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">0 Low SKUs</span>
+          </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p class="text-xs font-medium text-slate-500">Staged for Courier</p>
+          <div class="mt-2 flex items-baseline justify-between">
+            <span id="kpi-staged-count" class="text-2xl font-bold text-slate-900 mono">0</span>
+            <span class="text-xs text-slate-500">At Dock B</span>
+          </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+          <p class="text-xs font-medium text-slate-500">Completed & Dispatched</p>
+          <div class="mt-2 flex items-baseline justify-between">
+            <span id="kpi-dispatched-count" class="text-2xl font-bold text-slate-900 mono">0</span>
+            <span class="text-xs text-emerald-600 font-semibold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">100% On-Time</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- INVENTORY & WAREHOUSE AISLES SECTION -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Inventory List -->
+        <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h2 class="font-bold text-slate-900 text-sm">Warehouse SKU Catalog</h2>
+              <p class="text-xs text-slate-500">Manage real stock counts and physical bin locations</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="openAddSkuModal()" class="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 flex items-center gap-1.5 transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                Add SKU
+              </button>
+              <button onclick="reorderAllDepleted()" class="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-lg text-xs font-medium hover:bg-slate-200 transition-colors">
+                Restock Low
+              </button>
+            </div>
+          </div>
+          <div class="overflow-x-auto flex-1">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-600 border-b border-slate-200 uppercase font-semibold text-[10px] tracking-wider">
+                <tr>
+                  <th class="px-4 py-3">SKU</th>
+                  <th class="px-4 py-3">Item Description</th>
+                  <th class="px-4 py-3">Bin</th>
+                  <th class="px-4 py-3">In-Stock</th>
+                  <th class="px-4 py-3">Status</th>
+                  <th class="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="inventory-table-body" class="divide-y divide-slate-100 text-slate-700">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Mini Visual Aisle Map -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col">
+          <h2 class="font-bold text-slate-900 text-sm">Zone Layout & Bins</h2>
+          <p class="text-xs text-slate-500 mb-3">Live storage bay utilization snapshot</p>
+          
+          <div id="aisle-map-container" class="grid grid-cols-2 gap-2.5 flex-1 content-start">
+            <!-- Dynamically populated mini visual grid -->
+          </div>
+          
+          <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Normal</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span> Low Stock</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span> Depleted</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- MASTER ORDERS TABLE & AUDIT LOG -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Master Orders -->
+        <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 class="font-bold text-slate-900 text-sm">Master Order Flow</h2>
+              <p class="text-xs text-slate-500">Monitor order lifecycle and escalate priorities</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="openCreateOrderModal()" class="px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 transition-colors">
+                + New Order
+              </button>
+            </div>
+          </div>
+          <div class="overflow-x-auto flex-1">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 text-slate-600 border-b border-slate-200 uppercase font-semibold text-[10px] tracking-wider">
+                <tr>
+                  <th class="px-4 py-3">Order ID</th>
+                  <th class="px-4 py-3">Customer</th>
+                  <th class="px-4 py-3">Contents</th>
+                  <th class="px-4 py-3">Priority</th>
+                  <th class="px-4 py-3">Stage</th>
+                  <th class="px-4 py-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="master-orders-table" class="divide-y divide-slate-100 text-slate-700">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Audit Event Log -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex flex-col">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="font-bold text-slate-900 text-sm">Operational Audit Trail</h2>
+            <span class="text-[10px] font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-600">Real-time</span>
+          </div>
+          <div id="audit-log-container" class="space-y-3 overflow-y-auto max-h-80 pr-1 text-xs">
+            <!-- Dynamically populated events -->
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ============================================================= -->
+    <!-- VIEW 2: FLOOR PICKER & PACKING STATION VIEW                   -->
+    <!-- ============================================================= -->
+    <div id="view-picker" class="hidden space-y-6">
+
+      <!-- Picker Status Banner -->
+      <div class="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-center justify-between flex-wrap gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">
+            #2
+          </div>
+          <div>
+            <h2 class="font-bold text-indigo-950 text-sm">Floor Picking & Packing Bench</h2>
+            <p class="text-xs text-indigo-700">Verify items at physical bin locations, confirm SKUs, and assemble outbound cartons</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="togglePickerSubtab('pick')" id="btn-subtab-pick" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow-sm">
+            Picking Queue
+          </button>
+          <button onclick="togglePickerSubtab('pack')" id="btn-subtab-pack" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white text-indigo-900 border border-indigo-200 hover:bg-indigo-100">
+            Packing Bench
+          </button>
+        </div>
+      </div>
+
+      <!-- SUBVIEW A: PICKING QUEUE -->
+      <div id="subview-picking" class="space-y-4">
+        <div id="picking-cards-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Dynamically populated picking wave cards -->
+        </div>
+      </div>
+
+      <!-- SUBVIEW B: PACKING BENCH -->
+      <div id="subview-packing" class="hidden space-y-4">
+        <div id="packing-cards-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Dynamically populated packing orders -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================================= -->
+    <!-- VIEW 3: DISPATCH & LOGISTICS OFFICER VIEW                     -->
+    <!-- ============================================================= -->
+    <div id="view-dispatch" class="hidden space-y-6">
+
+      <!-- Dispatch Banner -->
+      <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center justify-between flex-wrap gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm">
+            #3
+          </div>
+          <div>
+            <h2 class="font-bold text-emerald-950 text-sm">Outbound Dispatch Dock & Carrier Handovers</h2>
+            <p class="text-xs text-emerald-700">Audit packed cartons, issue tracking waybills, and finalize driver sign-off manifests</p>
+          </div>
+        </div>
+        <button onclick="openManifestModal()" class="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-sm flex items-center gap-2">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          Print Outbound Manifest
+        </button>
+      </div>
+
+      <!-- Carrier Staging Dock -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
+          <h3 class="font-bold text-slate-900 text-sm">Dock Staging Bay (Awaiting Carrier Handover)</h3>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="text-slate-500 font-medium">Filter Carrier:</span>
+            <select id="carrier-filter-select" onchange="renderDispatchView()" class="px-2.5 py-1 border border-slate-200 rounded-lg bg-slate-50 text-slate-700 font-medium focus:outline-none">
+              <option value="ALL">All Carriers</option>
+              <option value="BlueDart Express">BlueDart Express</option>
+              <option value="Delhivery Surface">Delhivery Surface</option>
+              <option value="FedEx Express">FedEx Express</option>
+              <option value="SpeedPost Priority">SpeedPost Priority</option>
+            </select>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-600 border-b border-slate-200 uppercase font-semibold text-[10px] tracking-wider">
+              <tr>
+                <th class="px-4 py-3">Order ID</th>
+                <th class="px-4 py-3">Recipient & City</th>
+                <th class="px-4 py-3">Carrier / Fleet</th>
+                <th class="px-4 py-3">Tracking / Waybill</th>
+                <th class="px-4 py-3">Weight / Packaging</th>
+                <th class="px-4 py-3 text-right">Dock Action</th>
+              </tr>
+            </thead>
+            <tbody id="dispatch-table-body" class="divide-y divide-slate-100 text-slate-700">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: ADD NEW SKU                                            -->
+  <!-- ============================================================= -->
+  <div id="addSkuModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <h3 class="font-bold text-slate-900 text-base">Add New Warehouse SKU</h3>
+          <p class="text-xs text-slate-500">Register new product code and map physical storage bin</p>
+        </div>
+        <button onclick="closeAddSkuModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold leading-none">&times;</button>
+      </div>
+      <form id="skuForm" onsubmit="handleCreateSku(event)" class="p-5 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">SKU Code (Identifier)</label>
+          <input type="text" id="newSkuCode" placeholder="e.g. MAG-CHG15" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm mono focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Product Description</label>
+          <input type="text" id="newSkuName" placeholder="e.g. 15W Magnetic Wireless Charging Pad" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Bin Location</label>
+            <input type="text" id="newSkuLoc" placeholder="e.g. B-07" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm mono focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Initial Quantity</label>
+            <input type="number" id="newSkuStock" min="0" value="30" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Reorder Level (Min)</label>
+            <input type="number" id="newSkuMin" min="1" value="10" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Max Capacity</label>
+            <input type="number" id="newSkuMax" min="10" value="80" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeAddSkuModal()" class="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+          <button type="submit" class="px-4 py-2 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg shadow-sm">Save SKU</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: CREATE ORDER                                           -->
+  <!-- ============================================================= -->
+  <div id="createOrderModal" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <h3 class="font-bold text-slate-900 text-base">Inject New Sales Order</h3>
+          <p class="text-xs text-slate-500">Create an inbound order to route through fulfillment</p>
+        </div>
+        <button onclick="closeCreateOrderModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold leading-none">&times;</button>
+      </div>
+      <form id="orderForm" onsubmit="handleCreateOrder(event)" class="p-5 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Customer Full Name</label>
+          <input type="text" id="orderCustName" placeholder="e.g. Sarah Jenkins" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Destination City</label>
+          <input type="text" id="orderCustCity" placeholder="e.g. Mumbai, Maharashtra" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Select Product</label>
+            <select id="orderSkuSelect" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <!-- Dynamically populated from inventory -->
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Quantity</label>
+            <input type="number" id="orderQty" min="1" max="10" value="1" required class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Order Priority</label>
+            <select id="orderPriority" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="Normal">Normal Ground</option>
+              <option value="Rush">Rush Priority (SLA 2h)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Carrier Partner</label>
+            <select id="orderCarrier" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="BlueDart Express">BlueDart Express</option>
+              <option value="Delhivery Surface">Delhivery Surface</option>
+              <option value="FedEx Express">FedEx Express</option>
+              <option value="SpeedPost Priority">SpeedPost Priority</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeCreateOrderModal()" class="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg">Cancel</button>
+          <button type="submit" class="px-4 py-2 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 rounded-lg shadow-sm">Submit Order</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: PRINTABLE WAYBILL / SHIPPING LABEL                     -->
+  <!-- ============================================================= -->
+  <div id="waybillModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl max-w-md w-full shadow-2xl border border-slate-300 p-6 relative">
+      <div class="flex justify-between items-start border-b pb-4">
+        <div>
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Express Waybill</span>
+          <h2 id="wb-carrier" class="text-lg font-black text-slate-900">BlueDart Express</h2>
+        </div>
+        <button onclick="closeWaybillModal()" class="text-slate-400 hover:text-slate-700 text-2xl font-bold leading-none">&times;</button>
+      </div>
+
+      <div class="my-5 border-2 border-dashed border-slate-300 p-4 rounded-lg bg-slate-50 text-center">
+        <!-- CSS-generated Barcode lines -->
+        <div class="h-14 w-full flex items-center justify-center gap-[3px] bg-white p-2 rounded border border-slate-200">
+          <div class="bg-black h-full w-[2px]"></div><div class="bg-black h-full w-[3px]"></div><div class="bg-black h-full w-[1px]"></div>
+          <div class="bg-black h-full w-[4px]"></div><div class="bg-black h-full w-[2px]"></div><div class="bg-black h-full w-[1px]"></div>
+          <div class="bg-black h-full w-[3px]"></div><div class="bg-black h-full w-[2px]"></div><div class="bg-black h-full w-[4px]"></div>
+          <div class="bg-black h-full w-[1px]"></div><div class="bg-black h-full w-[2px]"></div><div class="bg-black h-full w-[3px]"></div>
+          <div class="bg-black h-full w-[2px]"></div><div class="bg-black h-full w-[4px]"></div><div class="bg-black h-full w-[1px]"></div>
+        </div>
+        <p id="wb-tracking" class="mono text-xs font-bold tracking-widest text-slate-800 mt-2">AWB-00000000</p>
+      </div>
+
+      <div class="space-y-2 text-xs border-b pb-4">
+        <div class="flex justify-between">
+          <span class="text-slate-500">Order Ref:</span>
+          <span id="wb-orderid" class="font-bold text-slate-900 mono">ORD-000</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-500">Ship To:</span>
+          <span id="wb-dest" class="font-semibold text-slate-900 text-right">Customer, City</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-500">Package Spec:</span>
+          <span id="wb-pkg" class="text-slate-700">Carton (0.45 kg)</span>
+        </div>
+      </div>
+
+      <div class="mt-4 flex gap-2">
+        <button onclick="window.print()" class="flex-1 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm">
+          Print Label
+        </button>
+        <button onclick="closeWaybillModal()" class="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- MODAL: OUTBOUND GATE PASS / DRIVER MANIFEST                   -->
+  <!-- ============================================================= -->
+  <div id="manifestModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl max-w-2xl w-full shadow-2xl border border-slate-300 p-6 max-h-[90vh] flex flex-col">
+      <div class="flex justify-between items-start border-b pb-4">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Outbound Dock Gate Pass & Carrier Manifest</h2>
+          <p class="text-xs text-slate-500">Vehicle loading manifest and physical chain of custody handover slip</p>
+        </div>
+        <button onclick="closeManifestModal()" class="text-slate-400 hover:text-slate-700 text-2xl font-bold leading-none">&times;</button>
+      </div>
+
+      <div class="my-4 overflow-y-auto flex-1">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-50 border-b text-slate-600 uppercase text-[10px]">
+            <tr>
+              <th class="p-2">Order ID</th>
+              <th class="p-2">Waybill / AWB</th>
+              <th class="p-2">Carrier</th>
+              <th class="p-2">Destination</th>
+              <th class="p-2">Items</th>
+            </tr>
+          </thead>
+          <tbody id="manifest-table-body" class="divide-y divide-slate-100">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="border-t pt-4 grid grid-cols-2 gap-6 text-xs text-slate-600">
+        <div>
+          <p class="font-semibold text-slate-800 mb-1">Warehouse Dispatch Supervisor:</p>
+          <p class="border-b border-slate-300 pb-1 mt-6">Signature: _______________________</p>
+        </div>
+        <div>
+          <p class="font-semibold text-slate-800 mb-1">Logistics Carrier Driver:</p>
+          <p class="border-b border-slate-300 pb-1 mt-6">Driver Signature & Badge: ____________</p>
+        </div>
+      </div>
+
+      <div class="mt-5 flex justify-end gap-2">
+        <button onclick="window.print()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm">
+          Print Manifest
+        </button>
+        <button onclick="closeManifestModal()" class="px-4 py-2 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-lg text-xs font-semibold">
+          Dismiss
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPT ENGINE -->
+  <script>
+    // INITIAL SYSTEM DATA
+    const DEFAULT_INVENTORY = [
+      { sku: 'CHG-65W', name: '65W GaN Fast Charger', loc: 'A-01', stock: 45, min: 10, max: 80 },
+      { sku: 'AP-PRO2', name: 'AirPods Pro (2nd Gen)', loc: 'A-04', stock: 18, min: 8, max: 50 },
+      { sku: 'CBL-TYPC', name: 'Braided USB-C Cable (2m)', loc: 'B-02', stock: 6, min: 15, max: 100 },
+      { sku: 'PB-MAG10', name: 'MagSafe Power Bank 10k', loc: 'B-05', stock: 22, min: 10, max: 60 },
+      { sku: 'KB-MECH', name: 'Wireless Mechanical Keyboard', loc: 'C-01', stock: 12, min: 5, max: 30 },
+      { sku: 'MS-ERGO', name: 'Ergonomic Bluetooth Mouse', loc: 'C-03', stock: 4, min: 8, max: 40 },
+      { sku: 'SLV-14', name: 'Laptop Sleeve 14-inch', loc: 'C-06', stock: 28, min: 10, max: 50 },
+      { sku: 'HP-STUDIO', name: 'Noise-Cancelling Studio Headphones', loc: 'A-08', stock: 9, min: 5, max: 25 }
+    ];
+
+    const DEFAULT_ORDERS = [
+      {
+        id: 'ORD-9021',
+        customer: 'Rohan Sharma',
+        city: 'Mumbai, MH',
+        priority: 'Rush',
+        stage: 'Pending',
+        carrier: 'BlueDart Express',
+        tracking: 'BD-8829104',
+        pkg: 'Padded Mailer (0.35kg)',
+        items: [{ sku: 'CHG-65W', name: '65W GaN Fast Charger', qty: 1, loc: 'A-01', picked: false }]
+      },
+      {
+        id: 'ORD-9022',
+        customer: 'Ananya Verma',
+        city: 'Bangalore, KA',
+        priority: 'Normal',
+        stage: 'Picking',
+        carrier: 'Delhivery Surface',
+        tracking: 'DEL-4410928',
+        pkg: 'Corrugated Box (0.60kg)',
+        items: [
+          { sku: 'AP-PRO2', name: 'AirPods Pro (2nd Gen)', qty: 1, loc: 'A-04', picked: true },
+          { sku: 'CBL-TYPC', name: 'Braided USB-C Cable (2m)', qty: 1, loc: 'B-02', picked: false }
+        ]
+      },
+      {
+        id: 'ORD-9023',
+        customer: 'Vikram Mehta',
+        city: 'New Delhi, DL',
+        priority: 'Rush',
+        stage: 'Packing',
+        carrier: 'FedEx Express',
+        tracking: 'FDX-7019284',
+        pkg: 'Corrugated Box (1.20kg)',
+        items: [{ sku: 'KB-MECH', name: 'Wireless Mechanical Keyboard', qty: 1, loc: 'C-01', picked: true }]
+      },
+      {
+        id: 'ORD-9024',
+        customer: 'Pooja Nair',
+        city: 'Kochi, KL',
+        priority: 'Normal',
+        stage: 'Staged',
+        carrier: 'SpeedPost Priority',
+        tracking: 'SP-1093847',
+        pkg: 'Standard Carton (0.45kg)',
+        items: [{ sku: 'PB-MAG10', name: 'MagSafe Power Bank 10k', qty: 1, loc: 'B-05', picked: true }]
+      },
+      {
+        id: 'ORD-9020',
+        customer: 'Sameer Patel',
+        city: 'Ahmedabad, GJ',
+        priority: 'Normal',
+        stage: 'Dispatched',
+        carrier: 'BlueDart Express',
+        tracking: 'BD-1192840',
+        pkg: 'Corrugated Box (0.75kg)',
+        items: [{ sku: 'SLV-14', name: 'Laptop Sleeve 14-inch', qty: 1, loc: 'C-06', picked: true }]
+      }
+    ];
+
+    // STATE INITIALIZATION
+    let state = {
+      role: 'manager',
+      inventory: JSON.parse(localStorage.getItem('pulsewms_inventory')) || DEFAULT_INVENTORY,
+      orders: JSON.parse(localStorage.getItem('pulsewms_orders')) || DEFAULT_ORDERS,
+      auditLog: JSON.parse(localStorage.getItem('pulsewms_audit')) || [
+        { time: 'Just now', action: 'System Initialized', detail: 'Fulfillment engine loaded with 5 orders.' }
+      ]
+    };
+
+    function saveState() {
+      localStorage.setItem('pulsewms_inventory', JSON.stringify(state.inventory));
+      localStorage.setItem('pulsewms_orders', JSON.stringify(state.orders));
+      localStorage.setItem('pulsewms_audit', JSON.stringify(state.auditLog));
+    }
+
+    function resetData() {
+      if (confirm('Reset warehouse data to factory sample state?')) {
+        localStorage.clear();
+        state.inventory = JSON.parse(JSON.stringify(DEFAULT_INVENTORY));
+        state.orders = JSON.parse(JSON.stringify(DEFAULT_ORDERS));
+        state.auditLog = [{ time: 'Just now', action: 'Factory Reset', detail: 'Restored default inventory and orders.' }];
+        saveState();
+        renderAll();
+      }
+    }
+
+    function logEvent(action, detail) {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      state.auditLog.unshift({ time: timeStr, action, detail });
+      if (state.auditLog.length > 30) state.auditLog.pop();
+    }
+
+    // AUDIO FEEDBACK (SYNTHETIC SCANNER BEEP)
+    function playBeep(freq = 1200, type = 'sine', duration = 0.08) {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      } catch (err) {
+        console.warn('Audio feedback skipped');
+      }
+    }
+
+    // ROLE SWITCHING ENGINE
+    function switchRole(newRole) {
+      state.role = newRole;
+      
+      // Update top button highlights
+      ['manager', 'picker', 'dispatch'].forEach(r => {
+        const btn = document.getElementById(`roleBtn-${r}`);
+        if (r === newRole) {
+          btn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all bg-white text-indigo-700 shadow-sm";
+        } else {
+          btn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-slate-600 hover:text-slate-900";
+        }
+      });
+
+      // Toggle View Sections
+      document.getElementById('view-manager').classList.toggle('hidden', newRole !== 'manager');
+      document.getElementById('view-picker').classList.toggle('hidden', newRole !== 'picker');
+      document.getElementById('view-dispatch').classList.toggle('hidden', newRole !== 'dispatch');
+
+      renderAll();
+    }
+
+    // =============================================================
+    // INVENTORY MANAGEMENT: ADD, DELETE & VALIDATION
+    // =============================================================
+
+    function openAddSkuModal() {
+      document.getElementById('addSkuModal').classList.remove('hidden');
+      document.getElementById('newSkuCode').focus();
+    }
+
+    function closeAddSkuModal() {
+      document.getElementById('addSkuModal').classList.add('hidden');
+      document.getElementById('skuForm').reset();
+    }
+
+    function handleCreateSku(e) {
+      e.preventDefault();
+      const sku = document.getElementById('newSkuCode').value.trim().toUpperCase();
+      const name = document.getElementById('newSkuName').value.trim();
+      const loc = document.getElementById('newSkuLoc').value.trim().toUpperCase();
+      const stock = parseInt(document.getElementById('newSkuStock').value) || 0;
+      const min = parseInt(document.getElementById('newSkuMin').value) || 5;
+      const max = parseInt(document.getElementById('newSkuMax').value) || 50;
+
+      // Duplicate Check
+      if (state.inventory.some(i => i.sku === sku)) {
+        alert(`SKU "${sku}" already exists in the warehouse catalog.`);
+        return;
+      }
+
+      state.inventory.push({ sku, name, loc, stock, min, max });
+      logEvent('SKU Created', `Added ${sku} (${name}) at Bin ${loc} with initial stock of ${stock}`);
+      saveState();
+      renderAll();
+      closeAddSkuModal();
+    }
+
+    // STRICT VALIDATION FOR DELETION
+    function deleteSku(skuCode) {
+      const item = state.inventory.find(i => i.sku === skuCode);
+      if (!item) return;
+
+      // Check if this SKU is in any active, unfulfilled order
+      const activeStages = ['Pending', 'Picking', 'Packing', 'Staged'];
+      const conflictingOrders = state.orders.filter(order => 
+        activeStages.includes(order.stage) &&
+        order.items &&
+        order.items.some(orderItem => orderItem.sku === skuCode)
+      );
+
+      // Block deletion if conflicting orders exist
+      if (conflictingOrders.length > 0) {
+        const orderIds = conflictingOrders.map(o => o.id).slice(0, 3).join(', ');
+        const extraCount = conflictingOrders.length > 3 ? ` and ${conflictingOrders.length - 3} more` : '';
+        
+        alert(
+          `Action Blocked: Cannot delete SKU "${skuCode}" (${item.name}).\n\n` +
+          `It is actively reserved in ${conflictingOrders.length} unfulfilled order(s): [${orderIds}${extraCount}].\n\n` +
+          `Please dispatch or cancel these orders before deleting this SKU from the warehouse catalog.`
+        );
+        return;
+      }
+
+      // Safe to delete confirmation
+      const confirmed = confirm(
+        `Are you sure you want to permanently delete SKU "${skuCode}" (${item.name})?\n` +
+        `This will remove the item from all warehouse catalogs and bin locations.`
+      );
+      if (!confirmed) return;
+
+      state.inventory = state.inventory.filter(i => i.sku !== skuCode);
+      logEvent('SKU Deleted', `Removed SKU ${skuCode} (${item.name}) from warehouse inventory`);
+      saveState();
+      renderAll();
+    }
+
+    function restock(skuCode, qty = 10) {
+      const item = state.inventory.find(i => i.sku === skuCode);
+      if (item) {
+        item.stock += qty;
+        logEvent('Stock Replenished', `Added +${qty} units to ${skuCode} (Now: ${item.stock})`);
+        saveState();
+        renderAll();
+      }
+    }
+
+    function reorderAllDepleted() {
+      let replenishedCount = 0;
+      state.inventory.forEach(item => {
+        if (item.stock <= item.min) {
+          item.stock += 20;
+          replenishedCount++;
+        }
+      });
+      if (replenishedCount > 0) {
+        logEvent('Batch Reorder', `Auto-restocked ${replenishedCount} low/depleted SKUs`);
+        saveState();
+        renderAll();
+      } else {
+        alert('All warehouse SKUs are currently well above reorder thresholds.');
+      }
+    }
+
+    // =============================================================
+    // SALES ORDER CREATION & PRIORITY ESCALATION
+    // =============================================================
+
+    function openCreateOrderModal() {
+      const select = document.getElementById('orderSkuSelect');
+      select.innerHTML = state.inventory.map(i => 
+        `<option value="${i.sku}">${i.sku} - ${i.name} (${i.stock} in stock)</option>`
+      ).join('');
+      document.getElementById('createOrderModal').classList.remove('hidden');
+    }
+
+    function closeCreateOrderModal() {
+      document.getElementById('createOrderModal').classList.add('hidden');
+      document.getElementById('orderForm').reset();
+    }
+
+    function handleCreateOrder(e) {
+      e.preventDefault();
+      const customer = document.getElementById('orderCustName').value.trim();
+      const city = document.getElementById('orderCustCity').value.trim();
+      const sku = document.getElementById('orderSkuSelect').value;
+      const qty = parseInt(document.getElementById('orderQty').value) || 1;
+      const priority = document.getElementById('orderPriority').value;
+      const carrier = document.getElementById('orderCarrier').value;
+
+      const invItem = state.inventory.find(i => i.sku === sku);
+      if (!invItem) return;
+
+      if (invItem.stock < qty) {
+        alert(`Insufficient Stock! Only ${invItem.stock} unit(s) of ${sku} available.`);
+        return;
+      }
+
+      const newId = `ORD-${Math.floor(1000 + Math.random() * 9000)}`;
+      const trackingCode = `${carrier.substring(0, 3).toUpperCase()}-${Math.floor(1000000 + Math.random() * 9000000)}`;
+
+      const newOrder = {
+        id: newId,
+        customer,
+        city,
+        priority,
+        stage: 'Pending',
+        carrier,
+        tracking: trackingCode,
+        pkg: 'Corrugated Box (0.65kg)',
+        items: [
+          { sku: invItem.sku, name: invItem.name, qty, loc: invItem.loc, picked: false }
+        ]
+      };
+
+      state.orders.unshift(newOrder);
+      logEvent('Order Received', `Order ${newId} created for ${customer} (${priority})`);
+      saveState();
+      renderAll();
+      closeCreateOrderModal();
+    }
+
+    function escalateOrder(orderId) {
+      const ord = state.orders.find(o => o.id === orderId);
+      if (ord) {
+        ord.priority = 'Rush';
+        logEvent('Priority Bump', `Order ${orderId} escalated to Rush priority status`);
+        saveState();
+        renderAll();
+      }
+    }
+
+    // =============================================================
+    // FULFILLMENT PIPELINE STEPPING ENGINE
+    // =============================================================
+
+    function runAutoPipelineStep() {
+      // Find highest priority order to step forward
+      const stageOrder = ['Pending', 'Picking', 'Packing', 'Staged'];
+      let targetOrder = state.orders.find(o => o.priority === 'Rush' && stageOrder.includes(o.stage));
+      if (!targetOrder) {
+        targetOrder = state.orders.find(o => stageOrder.includes(o.stage));
+      }
+
+      if (!targetOrder) {
+        alert('All orders are currently dispatched! Click "+ New Order" to simulate more.');
+        return;
+      }
+
+      if (targetOrder.stage === 'Pending') {
+        targetOrder.stage = 'Picking';
+        logEvent('Wave Created', `Order ${targetOrder.id} routed to Floor Picking list`);
+        playBeep(900, 'sine', 0.1);
+      } else if (targetOrder.stage === 'Picking') {
+        // Mark items picked and deduct physical inventory
+        targetOrder.items.forEach(it => {
+          it.picked = true;
+          const inv = state.inventory.find(i => i.sku === it.sku);
+          if (inv && inv.stock >= it.qty) inv.stock -= it.qty;
+        });
+        targetOrder.stage = 'Packing';
+        logEvent('Picking Completed', `Order ${targetOrder.id} verified and sent to Packing Bench`);
+        playBeep(1400, 'sine', 0.12);
+      } else if (targetOrder.stage === 'Packing') {
+        targetOrder.stage = 'Staged';
+        logEvent('Carton Sealed', `Order ${targetOrder.id} boxed, weighed, and staged at Outbound Dock`);
+        playBeep(1100, 'triangle', 0.1);
+      } else if (targetOrder.stage === 'Staged') {
+        targetOrder.stage = 'Dispatched';
+        logEvent('Carrier Handover', `Order ${targetOrder.id} handed to ${targetOrder.carrier} (${targetOrder.tracking})`);
+        playBeep(1800, 'sine', 0.15);
+      }
+
+      saveState();
+      renderAll();
+    }
+
+    // =============================================================
+    // PICKER & PACKER ACTIONS
+    // =============================================================
+
+    function togglePickerSubtab(subtab) {
+      document.getElementById('subview-picking').classList.toggle('hidden', subtab !== 'pick');
+      document.getElementById('subview-packing').classList.toggle('hidden', subtab !== 'pack');
+
+      const btnPick = document.getElementById('btn-subtab-pick');
+      const btnPack = document.getElementById('btn-subtab-pack');
+
+      if (subtab === 'pick') {
+        btnPick.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow-sm";
+        btnPack.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white text-indigo-900 border border-indigo-200 hover:bg-indigo-100";
+      } else {
+        btnPack.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white shadow-sm";
+        btnPick.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white text-indigo-900 border border-indigo-200 hover:bg-indigo-100";
+      }
+    }
+
+    function togglePickItem(orderId, skuCode) {
+      const order = state.orders.find(o => o.id === orderId);
+      if (!order) return;
+      const item = order.items.find(i => i.sku === skuCode);
+      if (!item) return;
+
+      item.picked = !item.picked;
+      playBeep(item.picked ? 1500 : 700, 'sine', 0.08);
+
+      // Check if all items in order are picked
+      const allPicked = order.items.every(i => i.picked);
+      if (allPicked) {
+        // Auto deduct from warehouse stock
+        order.items.forEach(it => {
+          const inv = state.inventory.find(i => i.sku === it.sku);
+          if (inv && inv.stock >= it.qty) inv.stock -= it.qty;
+        });
+        order.stage = 'Packing';
+        logEvent('Wave Picked', `Order ${orderId} fully picked. Transferred to Packing bench.`);
+      }
+
+      saveState();
+      renderAll();
+    }
+
+    function completePacking(orderId) {
+      const order = state.orders.find(o => o.id === orderId);
+      if (!order) return;
+      order.stage = 'Staged';
+      playBeep(1200, 'triangle', 0.1);
+      logEvent('Packing Completed', `Order ${orderId} packed into ${order.pkg} and staged for carrier.`);
+      saveState();
+      renderAll();
+    }
+
+    // =============================================================
+    // WAYBILL & MANIFEST MODALS
+    // =============================================================
+
+    function openWaybillModal(orderId) {
+      const order = state.orders.find(o => o.id === orderId);
+      if (!order) return;
+
+      document.getElementById('wb-carrier').innerText = order.carrier;
+      document.getElementById('wb-tracking').innerText = order.tracking;
+      document.getElementById('wb-orderid').innerText = order.id;
+      document.getElementById('wb-dest').innerText = `${order.customer}, ${order.city}`;
+      document.getElementById('wb-pkg').innerText = order.pkg;
+
+      document.getElementById('waybillModal').classList.remove('hidden');
+    }
+
+    function closeWaybillModal() {
+      document.getElementById('waybillModal').classList.add('hidden');
+    }
+
+    function openManifestModal() {
+      const stagedOrders = state.orders.filter(o => o.stage === 'Staged');
+      const tbody = document.getElementById('manifest-table-body');
+
+      if (stagedOrders.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">No staged orders currently awaiting carrier dispatch.</td></tr>`;
+      } else {
+        tbody.innerHTML = stagedOrders.map(o => `
+          <tr class="hover:bg-slate-50">
+            <td class="p-2 font-bold mono text-slate-900">${o.id}</td>
+            <td class="p-2 mono text-slate-600">${o.tracking}</td>
+            <td class="p-2 font-medium text-slate-800">${o.carrier}</td>
+            <td class="p-2 text-slate-600">${o.customer} (${o.city})</td>
+            <td class="p-2 text-slate-500">${o.items.map(i => `${i.qty}x ${i.sku}`).join(', ')}</td>
+          </tr>
+        `).join('');
+      }
+
+      document.getElementById('manifestModal').classList.remove('hidden');
+    }
+
+    function closeManifestModal() {
+      document.getElementById('manifestModal').classList.add('hidden');
+    }
+
+    function dispatchOrder(orderId) {
+      const order = state.orders.find(o => o.id === orderId);
+      if (!order) return;
+      order.stage = 'Dispatched';
+      playBeep(1750, 'sine', 0.12);
+      logEvent('Order Handed Over', `Order ${orderId} picked up by ${order.carrier} (${order.tracking})`);
+      saveState();
+      renderAll();
+    }
+
+    // =============================================================
+    // RENDER FUNCTIONS
+    // =============================================================
+
+    function renderAll() {
+      renderKPIs();
+      renderInventoryTable();
+      renderAisleMap();
+      renderMasterOrders();
+      renderAuditLog();
+      renderPickerView();
+      renderDispatchView();
+    }
+
+    function renderKPIs() {
+      const activeOrders = state.orders.filter(o => o.stage !== 'Dispatched');
+      const rushCount = activeOrders.filter(o => o.priority === 'Rush').length;
+      const totalUnits = state.inventory.reduce((sum, item) => sum + item.stock, 0);
+      const lowStockCount = state.inventory.filter(item => item.stock <= item.min).length;
+      const stagedCount = state.orders.filter(o => o.stage === 'Staged').length;
+      const dispatchedCount = state.orders.filter(o => o.stage === 'Dispatched').length;
+
+      document.getElementById('kpi-total-orders').innerText = activeOrders.length;
+      document.getElementById('kpi-rush-count').innerText = `${rushCount} Rush`;
+      document.getElementById('kpi-stock-units').innerText = totalUnits;
+      document.getElementById('kpi-low-stock-count').innerText = `${lowStockCount} Low SKUs`;
+      document.getElementById('kpi-staged-count').innerText = stagedCount;
+      document.getElementById('kpi-dispatched-count').innerText = dispatchedCount;
+    }
+
+    function renderInventoryTable() {
+      const tbody = document.getElementById('inventory-table-body');
+      tbody.innerHTML = state.inventory.map(item => {
+        let statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Stocked</span>';
+        if (item.stock === 0) {
+          statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">Out of Stock</span>';
+        } else if (item.stock <= item.min) {
+          statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">Low Stock</span>';
+        }
+
+        return `
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="px-4 py-3 font-semibold mono text-slate-900">${item.sku}</td>
+            <td class="px-4 py-3 font-medium text-slate-800">${item.name}</td>
+            <td class="px-4 py-3 mono text-slate-500 font-semibold">${item.loc}</td>
+            <td class="px-4 py-3 mono font-bold ${item.stock <= item.min ? 'text-amber-600' : 'text-slate-800'}">${item.stock}</td>
+            <td class="px-4 py-3">${statusBadge}</td>
+            <td class="px-4 py-3 text-right">
+              <div class="flex items-center justify-end gap-1.5">
+                <button onclick="restock('${item.sku}', 10)" title="Add +10 stock" class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-medium transition-colors">
+                  +10
+                </button>
+                <button onclick="deleteSku('${item.sku}')" title="Delete SKU with validation" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded text-[11px] font-medium transition-colors">
+                  Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderAisleMap() {
+      const container = document.getElementById('aisle-map-container');
+      container.innerHTML = state.inventory.map(item => {
+        let colorClass = 'bg-emerald-500';
+        if (item.stock === 0) colorClass = 'bg-rose-500';
+        else if (item.stock <= item.min) colorClass = 'bg-amber-500';
+
+        return `
+          <div class="p-2.5 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-between">
+            <div>
+              <span class="mono text-[11px] font-bold text-slate-900">${item.loc}</span>
+              <p class="text-[10px] text-slate-500 truncate max-w-[90px]">${item.sku}</p>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="mono text-xs font-bold text-slate-700">${item.stock}</span>
+              <span class="w-2.5 h-2.5 rounded-full ${colorClass}"></span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderMasterOrders() {
+      const tbody = document.getElementById('master-orders-table');
+      tbody.innerHTML = state.orders.map(order => {
+        const isRush = order.priority === 'Rush';
+        const priorityBadge = isRush 
+          ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">Rush</span>'
+          : '<span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600">Normal</span>';
+
+        let stageBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700">${order.stage}</span>`;
+        if (order.stage === 'Picking') stageBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">Picking</span>`;
+        if (order.stage === 'Packing') stageBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">Packing</span>`;
+        if (order.stage === 'Staged') stageBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">Staged</span>`;
+        if (order.stage === 'Dispatched') stageBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">Dispatched</span>`;
+
+        return `
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="px-4 py-3 font-semibold mono text-slate-900">${order.id}</td>
+            <td class="px-4 py-3">
+              <div class="font-medium text-slate-800">${order.customer}</div>
+              <div class="text-[10px] text-slate-500">${order.city}</div>
+            </td>
+            <td class="px-4 py-3 text-slate-600">${order.items.map(i => `${i.qty}x ${i.name}`).join(', ')}</td>
+            <td class="px-4 py-3">${priorityBadge}</td>
+            <td class="px-4 py-3">${stageBadge}</td>
+            <td class="px-4 py-3 text-right">
+              ${!isRush && order.stage !== 'Dispatched' ? `
+                <button onclick="escalateOrder('${order.id}')" class="text-[11px] text-rose-600 font-semibold hover:underline">
+                  Bump Rush
+                </button>
+              ` : '<span class="text-slate-400 text-[11px]">&mdash;</span>'}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderAuditLog() {
+      const container = document.getElementById('audit-log-container');
+      container.innerHTML = state.auditLog.map(log => `
+        <div class="border-l-2 border-indigo-500 pl-3 py-0.5">
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="font-bold text-slate-800">${log.action}</span>
+            <span class="mono text-[10px] text-slate-500">${log.time}</span>
+          </div>
+          <p class="text-[11px] text-slate-600 mt-0.5">${log.detail}</p>
+        </div>
+      `).join('');
+    }
+
+    function renderPickerView() {
+      // 1. Picking Wave Cards
+      const pickingOrders = state.orders.filter(o => o.stage === 'Pending' || o.stage === 'Picking');
+      const pickContainer = document.getElementById('picking-cards-container');
+
+      if (pickingOrders.length === 0) {
+        pickContainer.innerHTML = `<div class="col-span-full p-8 text-center bg-white rounded-xl border border-slate-200 text-slate-400 text-xs">No pending orders in the picking queue.</div>`;
+      } else {
+        pickContainer.innerHTML = pickingOrders.map(order => `
+          <div class="bg-white p-5 rounded-xl border ${order.priority === 'Rush' ? 'border-rose-300 ring-1 ring-rose-200' : 'border-slate-200'} shadow-sm space-y-3">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="mono font-bold text-slate-900">${order.id}</span>
+                <span class="ml-2 text-xs text-slate-500">${order.customer}</span>
+              </div>
+              <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${order.priority === 'Rush' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-600'}">
+                ${order.priority}
+              </span>
+            </div>
+
+            <div class="space-y-2 border-t border-b border-slate-100 py-3">
+              ${order.items.map(item => `
+                <div class="flex items-center justify-between text-xs">
+                  <div class="flex items-center gap-2">
+                    <input type="checkbox" ${item.picked ? 'checked' : ''} onchange="togglePickItem('${order.id}', '${item.sku}')" class="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4">
+                    <span class="${item.picked ? 'line-through text-slate-400' : 'font-medium text-slate-800'}">${item.name}</span>
+                  </div>
+                  <span class="mono font-bold px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[11px]">${item.loc}</span>
+                </div>
+              `).join('')}
+            </div>
+
+            <div class="flex justify-between items-center text-xs">
+              <span class="text-slate-500">${order.items.filter(i => i.picked).length} / ${order.items.length} Picked</span>
+              <button onclick="order.items.forEach(i => i.picked = true); togglePickItem('${order.id}', '${order.items[0].sku}');" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800">
+                Pick All &rarr;
+              </button>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      // 2. Packing Bench Cards
+      const packingOrders = state.orders.filter(o => o.stage === 'Packing');
+      const packContainer = document.getElementById('packing-cards-container');
+
+      if (packingOrders.length === 0) {
+        packContainer.innerHTML = `<div class="col-span-full p-8 text-center bg-white rounded-xl border border-slate-200 text-slate-400 text-xs">No orders waiting at the packing bench.</div>`;
+      } else {
+        packContainer.innerHTML = packingOrders.map(order => `
+          <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
+            <div class="flex justify-between items-start">
+              <div>
+                <span class="mono font-bold text-slate-900">${order.id}</span>
+                <span class="ml-2 text-xs font-semibold text-indigo-600">Ready to Box</span>
+              </div>
+              <button onclick="openWaybillModal('${order.id}')" class="text-xs text-slate-500 hover:text-indigo-600 flex items-center gap-1">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                Waybill
+              </button>
+            </div>
+
+            <div class="text-xs text-slate-600 space-y-1 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+              <p><span class="font-semibold text-slate-700">Recipient:</span> ${order.customer} (${order.city})</p>
+              <p><span class="font-semibold text-slate-700">Enclosure:</span> ${order.pkg}</p>
+              <p><span class="font-semibold text-slate-700">Assigned Carrier:</span> ${order.carrier}</p>
+            </div>
+
+            <button onclick="completePacking('${order.id}')" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors">
+              Seal Carton & Hand to Dock
+            </button>
+          </div>
+        `).join('');
+      }
+    }
+
+    function renderDispatchView() {
+      const selectedCarrier = document.getElementById('carrier-filter-select').value;
+      const stagedOrders = state.orders.filter(o => 
+        o.stage === 'Staged' && (selectedCarrier === 'ALL' || o.carrier === selectedCarrier)
+      );
+      const tbody = document.getElementById('dispatch-table-body');
+
+      if (stagedOrders.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400 text-xs">No parcels staged for this carrier filter.</td></tr>`;
+      } else {
+        tbody.innerHTML = stagedOrders.map(order => `
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="px-4 py-3 font-semibold mono text-slate-900">${order.id}</td>
+            <td class="px-4 py-3 font-medium text-slate-800">${order.customer} <span class="text-slate-400 font-normal">(${order.city})</span></td>
+            <td class="px-4 py-3 font-semibold text-indigo-600">${order.carrier}</td>
+            <td class="px-4 py-3 mono font-medium text-slate-600">${order.tracking}</td>
+            <td class="px-4 py-3 text-slate-500">${order.pkg}</td>
+            <td class="px-4 py-3 text-right">
+              <button onclick="dispatchOrder('${order.id}')" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors">
+                Handover &rarr;
+              </button>
+            </td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    // INITIAL MOUNT
+    renderAll();
+  </script>
+</body>
+</html>
